@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Whatever...</title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.css" />
+	<!--[if lte IE 8]>
+		<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.ie.css" />
+	<![endif]-->
+	<style type="text/css">
+		body {
+			padding: 0;
+			margin: 0;
+		}
+		html, body, #map {
+			height: 100%;
+		}
+		#map_ {
+			width: 600px;
+			height: 400px;
+		}
+	</style>
+	<script src="http://cdn.leafletjs.com/leaflet-0.5.1/leaflet.js"></script>
+</head>
+<body>
+	<div id="map"></div>
+
+
+	<script type="text/javascript">
+    var cloudmadeKEY = 'insert_your_dev_id_here';
+
+		var pointsToPlot = [
+			{ name: 'Point A, China', geo: '31.613191,120.642946'},
+			{ name: 'Point B, China', geo: '39.90403,116.407526', route: 'car'},
+			{ name: 'Point C, Kyrgyzstan', geo: '41.42482,75.998154', route: 'foot'},
+			{ name: 'Point D, India', geo: '13.2758,74.824394', route: 'bicycle'},
+			{ name: 'Al-Edisat, Egypt', geo: '25.583756,32.497628'}
+		];
+
+		function toLatLng(latLngString){
+			return [latLngString.split(",")[0], latLngString.split(",")[1]];
+		}
+
+		function addScript(url) {
+			var script = document.createElement('script');
+			script.type="text/javascript";
+			script.src=url;
+			document.getElementsByTagName('head') [0].appendChild(script);
+		}
+
+		/*
+		* Map Initialization
+		*/
+		var map = L.map('map', {
+			center: [39.083333,63.566667],
+			zoom: 4,
+			attributionControl: false
+		});
+
+		L.tileLayer('http://{s}.tile.cloudmade.com/' + cloudmadeKEY + '/4/256/{z}/{x}/{y}.png', {
+			maxZoom: 18,
+			detectRetina: true,
+//			attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://cloudmade.com">CloudMade</a>'
+		}).addTo(map);
+
+		for (var i = 0; i < pointsToPlot.length; i++){
+			L.marker(toLatLng(pointsToPlot[i].geo)).addTo(map)
+				.bindPopup("<b>" + pointsToPlot[i].name +"</b><br /><table><tr><td>blahblah</td></tr></table>Yo!");//.openPopup();
+			
+			if (i > 0) { // ignore first point
+				if (typeof pointsToPlot[i].route === "undefined"){ // if not defined, plot all types
+  				addScript('http://routes.cloudmade.com/' + cloudmadeKEY + '/api/0.3/' + pointsToPlot[i].geo + ',' + pointsToPlot[i - 1].geo + '/car.js?callback=getRouteRed');
+  				addScript('http://routes.cloudmade.com/' + cloudmadeKEY + '/api/0.3/' + pointsToPlot[i].geo + ',' + pointsToPlot[i - 1].geo + '/foot.js?callback=getRouteBlue');
+  				addScript('http://routes.cloudmade.com/' + cloudmadeKEY + '/api/0.3/' + pointsToPlot[i].geo + ',' + pointsToPlot[i - 1].geo + '/bicycle.js?callback=getRouteGreen');
+				}
+				else {
+					if (pointsToPlot[i].route === 'direct'){ // if direct, plot straight line between the points
+						var response = {};
+						response.status = 0;
+						response.route_geometry = [];
+						response.route_geometry.push(pointsToPlot[i].geo.split(","));
+						response.route_geometry.push(pointsToPlot[i - 1].geo.split(","));
+						response.color = 'red';
+						getRoute(response);
+					}
+					else {
+            // load/plot route specified. Color using default (red)
+						addScript('http://routes.cloudmade.com/' + cloudmadeKEY + '/api/0.3/' + pointsToPlot[i].geo + ',' + pointsToPlot[i - 1].geo + '/' + pointsToPlot[i].route + 	'.js?callback=getRouteRed');
+						}
+				}
+			}
+		}
+
+		function getRouteRed(response){
+			response.color = 'red';
+			getRoute(response);
+		}
+
+		function getRouteBlue(response){
+			response.color = 'blue';
+			getRoute(response);
+		}
+
+		function getRouteGreen(response){
+			response.color = 'green';
+			getRoute(response);
+		}
+
+		//var all_points = [];
+		function getRoute(response) {
+			if (response.status != 0) return;
+			if (typeof response.color === "undefined") response.color = 'red';
+			//all_points.push(response.route_geometry);
+			var point, route, points = [];
+			for (var i=0; i<response.route_geometry.length; i++)
+			{
+				point = new L.LatLng(response.route_geometry[i][0] , response.route_geometry[i][1]);
+				points.push(point);
+			}
+			route= new L.Polyline(points, {
+				weight: 4,
+				opacity: 0.5,
+				smoothFactor: 1.0,
+				color: response.color,
+				clicable: false
+			}).addTo(map);
+			route.bringToFront();
+		}
+
+		var popup = L.popup();
+
+		map.on('click', function(e){
+			popup
+				.setLatLng(e.latlng)
+				.setContent("You clicked the map at " + e.latlng.toString())
+				.openOn(map);
+		});
+
+		map.on('locationfound', function(e){
+			var radius = e.accuracy / 2;
+			L.marker(e.latlng).addTo(map)
+				.bindPopup("You are within " + radius + " meters from this point").openPopup();
+			L.circle(e.latlng, radius).addTo(map);
+		});
+
+		map.on('locationerror', function(e){
+			alert(e.message);
+		});
+
+	</script>
+</body>
+</html>
